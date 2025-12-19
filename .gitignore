@@ -15,3 +15,6 @@ checkpoint-*/
 # IDE 설정 파일
 .vscode/
 .idea/
+
+# 데이터 파일
+.csv
