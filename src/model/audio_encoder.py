@@ -2,12 +2,11 @@ import torch
 from torch import nn
 from transformers import AutoModel, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
-from abc import ABC, abstractmethod
+import os
 
 
-class BaseAudioEncoder(nn.Module, ABC):
+class BaseAudioEncoder(nn.Module):
     """Base class for audio encoders"""
-    @abstractmethod
     def forward(self, x):
         """
         Forward pass
@@ -17,12 +16,126 @@ class BaseAudioEncoder(nn.Module, ABC):
                 - Each element: (batch_size, seq_len, hidden_size)
                 - Last element is the final layer output
         """
-        pass
+        raise NotImplementedError("Subclasses must implement forward method")
     
-    @abstractmethod
     def get_hidden_size(self):
         """Get hidden size"""
-        pass
+        raise NotImplementedError("Subclasses must implement get_hidden_size method")
+    
+    def save_lora_weights(self, save_path):
+        """
+        Save LoRA weights only (adapter weights)
+        PeftModel.save_pretrained() saves only adapter weights, not full model weights
+        
+        Args:
+            save_path: Path to save the LoRA weights
+        """
+        use_lora = (hasattr(self, 'use_lora') and self.use_lora) or (hasattr(self, 'use_qlora') and self.use_qlora)
+        if use_lora:
+            if not isinstance(self.encoder, PeftModel):
+                raise ValueError("encoder is not a PeftModel. LoRA weights cannot be saved separately.")
+            os.makedirs(save_path, exist_ok=True)
+            # PeftModel.save_pretrained() saves only adapter weights (LoRA weights)
+            self.encoder.save_pretrained(save_path)
+            print(f"Saved LoRA weights to {save_path}")
+        else:
+            raise ValueError("Model does not use LoRA/QLoRA")
+    
+    def load_lora_weights(self, lora_path):
+        """
+        Load LoRA weights
+        
+        Args:
+            lora_path: Path to load the LoRA weights from
+        """
+        use_lora = (hasattr(self, 'use_lora') and self.use_lora) or (hasattr(self, 'use_qlora') and self.use_qlora)
+        if use_lora:
+            self.encoder = PeftModel.from_pretrained(self.encoder, lora_path)
+            print(f"Loaded LoRA weights from {lora_path}")
+        else:
+            raise ValueError("Model does not use LoRA/QLoRA")
+    
+    def save_model_weights(self, save_path):
+        """
+        Save full model weights
+        
+        Args:
+            save_path: Path to save the model weights
+        """
+        os.makedirs(save_path, exist_ok=True)
+        # PeftModel인 경우: merge 후 전체 모델 저장
+        if isinstance(self.encoder, PeftModel):
+            # 원본 모델을 보존하기 위해 merge한 모델을 새로 생성
+            merged_model = self.encoder.merge_and_unload()
+            merged_model.save_pretrained(save_path)
+            print(f"Saved full model weights (merged LoRA) to {save_path}")
+        else:
+            # 일반 모델인 경우: 그대로 저장
+            self.encoder.save_pretrained(save_path)
+            print(f"Saved model weights to {save_path}")
+    
+    def load_model_weights(self, load_path):
+        """
+        Load full model weights
+        
+        Args:
+            load_path: Path to load the model weights from
+        """
+        use_lora = (hasattr(self, 'use_lora') and self.use_lora) or (hasattr(self, 'use_qlora') and self.use_qlora)
+        if use_lora:
+            self.encoder = PeftModel.from_pretrained(self.encoder, load_path)
+        else:
+            if hasattr(self, 'model_name') and 'whisper' in self.model_name.lower():
+                from transformers import WhisperModel
+                whisper_model = WhisperModel.from_pretrained(load_path, trust_remote_code=True)
+                self.encoder = whisper_model.encoder
+                self.encoder.config.output_hidden_states = True
+            else:
+                self.encoder = AutoModel.from_pretrained(
+                    load_path,
+                    trust_remote_code=True,
+                    output_hidden_states=True
+                )
+        print(f"Loaded model weights from {load_path}")
+    
+    def set_inference_mode(self):
+        """Set model to inference mode (eval mode, disable gradients)"""
+        self.eval()
+        for param in self.parameters():
+            param.requires_grad = False
+    
+    def set_training_mode(self):
+        """Set model to training mode"""
+        self.train()
+        # LoRA/QLoRA 사용 시: LoRA 파라미터만 trainable
+        use_lora = (hasattr(self, 'use_lora') and self.use_lora) or (hasattr(self, 'use_qlora') and self.use_qlora)
+        if use_lora:
+            if isinstance(self.encoder, PeftModel):
+                # PEFT 모델의 경우, LoRA 파라미터만 trainable로 설정
+                # PeftModel은 기본적으로 LoRA 파라미터만 trainable이지만,
+                # set_inference_mode() 후 다시 활성화하기 위해 명시적으로 설정
+                for name, param in self.encoder.named_parameters():
+                    if 'lora' in name.lower():
+                        param.requires_grad = True
+                    else:
+                        param.requires_grad = False
+        # Full fine-tuning 사용 시: 모든 파라미터 trainable
+        elif hasattr(self, 'finetune') and self.finetune:
+            for param in self.parameters():
+                param.requires_grad = True
+    
+    def inference(self, x):
+        """
+        Run inference (forward pass without gradients)
+        
+        Args:
+            x: Input tensor
+        Returns:
+            hidden_states: Tuple of all layer outputs
+        """
+        self.eval()
+        with torch.no_grad():
+            return self.forward(x)
 
 
 class WhisperAudioEncoder(BaseAudioEncoder):
@@ -42,6 +155,7 @@ class WhisperAudioEncoder(BaseAudioEncoder):
         lora_dropout=0.05,
         lora_target_modules=None,
         lora_path=None,
+        model_path=None,
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
@@ -74,9 +188,12 @@ class WhisperAudioEncoder(BaseAudioEncoder):
             model_kwargs["device_map"] = "auto"
             model_kwargs["low_cpu_mem_usage"] = True
         
+        # Load from pretrained model or saved weights
+        load_from = model_path if model_path is not None else model_name
+        
         # Load WhisperModel and use only encoder (remove decoder)
         from transformers import WhisperModel
-        whisper_model = WhisperModel.from_pretrained(model_name, **model_kwargs)
+        whisper_model = WhisperModel.from_pretrained(load_from, **model_kwargs)
         self.encoder = whisper_model.encoder
         # Enable output_hidden_states to get all layer outputs
         self.encoder.config.output_hidden_states = True
@@ -131,15 +248,19 @@ class HubertAudioEncoder(BaseAudioEncoder):
         self,
         model_name,
         finetune=False,
+        model_path=None,
         trust_remote_code=True,
     ):
         super().__init__()
         self.model_name = model_name
         self.finetune = finetune
         
+        # Load from pretrained model or saved weights
+        load_from = model_path if model_path is not None else model_name
+        
         # Load model
         model_kwargs = {"trust_remote_code": trust_remote_code, "output_hidden_states": True}
-        self.encoder = AutoModel.from_pretrained(model_name, **model_kwargs)
+        self.encoder = AutoModel.from_pretrained(load_from, **model_kwargs)
         
         # Finetune setting
         if finetune:
@@ -175,15 +296,19 @@ class Wav2Vec2AudioEncoder(BaseAudioEncoder):
         self,
         model_name,
         finetune=False,
+        model_path=None,
         trust_remote_code=True,
     ):
         super().__init__()
         self.model_name = model_name
         self.finetune = finetune
         
+        # Load from pretrained model or saved weights
+        load_from = model_path if model_path is not None else model_name
+        
         # Load model
         model_kwargs = {"trust_remote_code": trust_remote_code, "output_hidden_states": True}
-        self.encoder = AutoModel.from_pretrained(model_name, **model_kwargs)
+        self.encoder = AutoModel.from_pretrained(load_from, **model_kwargs)
         
         # Finetune setting
         if finetune:
@@ -208,7 +333,6 @@ class Wav2Vec2AudioEncoder(BaseAudioEncoder):
     def get_hidden_size(self):
         """Get hidden size of the encoder"""
         return self.encoder.config.hidden_size
-
 
 
 def _apply_lora(
