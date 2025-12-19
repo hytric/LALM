@@ -1,0 +1,17 @@
+# Python 관련
+__pycache__/
+*.py[cod]
+.env
+venv/
+
+# 모델 가중치 및 체크포인트 (용량이 커서 깃허브 업로드 불가)
+*.pt
+*.pth
+*.bin
+*.safetensors
+output/
+checkpoint-*/
+
+# IDE 설정 파일
+.vscode/
+.idea/
