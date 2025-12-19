@@ -1,7 +1,7 @@
 model:
   base_learning_rate: 1.0e-4
   scale_lr: False
-  target: src.LALM.LALMModel
+  target: src.model.LALM.LALMModel
   params:
     audio_encoder:
       target: src.model.audio_encoder.WhisperAudioEncoder

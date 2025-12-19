@@ -23,3 +23,9 @@ class MultiModalProjector(nn.Module):
         hidden_states = self.act(hidden_states)
         hidden_states = self.linear_2(hidden_states)
         return hidden_states
+
+    def set_inference_mode(self):
+        """Set model to inference mode"""
+        self.eval()
+        for param in self.parameters():
+            param.requires_grad = False

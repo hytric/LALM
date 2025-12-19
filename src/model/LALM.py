@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from .model.audio_encoder import BaseAudioEncoder
-from .model.adapter import MultiModalProjector
-from .model.LLM import LLMDecoder
+from .audio_encoder import BaseAudioEncoder
+from .adapter import MultiModalProjector
+from .LLM import LLMDecoder
 
 
 class LALMModel(nn.Module):
@@ -230,6 +230,12 @@ class LALMModel(nn.Module):
             )
         
         return generated_ids
+
+    def set_inference_mode(self):
+        """Set model to inference mode"""
+        self.audio_encoder.set_inference_mode()
+        self.llm_decoder.set_inference_mode()
+        self.adapter.set_inference_mode()
     
     def get_audio_encoder(self):
         """Return Audio Encoder"""

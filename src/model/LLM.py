@@ -177,3 +177,9 @@ class LLMDecoder(nn.Module):
             print(f"Loaded LoRA weights from {lora_path}")
         else:
             raise ValueError("Model does not use LoRA/QLoRA")
+
+    def set_inference_mode(self):
+        """Set model to inference mode"""
+        self.eval()
+        for param in self.parameters():
+            param.requires_grad = False
