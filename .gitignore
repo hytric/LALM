@@ -17,4 +17,8 @@ checkpoint-*/
 .idea/
 
 # 데이터 파일
-.csv
+*.csv
+
+
+# test 파일
+test*
