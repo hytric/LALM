@@ -2,7 +2,7 @@ import torch
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from utils.setup_util import instantiate_from_config
+from src.utils.common_utils import instantiate_from_config
 from .model.LALM import LALMModel
 
 

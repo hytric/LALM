@@ -1,0 +1,19 @@
+# LibriSpeech Train Dataset Config
+target: src.data.librispeech.LibriSpeechDataset
+params:
+  data_root: null
+  batch_size: 4
+  num_workers: 4
+  train:
+    target: src.data.librispeech.LibriSpeechDataset
+    params:
+      jsonl_file: "dataset/Librispeech/librispeech_train.jsonl"
+      librispeech_root: null  # null이면 환경변수 LIBRISPEECH_ROOT 또는 기본 경로 사용
+      stage: 1
+  validation:
+    target: src.data.librispeech.LibriSpeechDataset
+    params:
+      jsonl_file: "dataset/Librispeech/librispeech_dev.jsonl"
+      librispeech_root: null  # null이면 환경변수 LIBRISPEECH_ROOT 또는 기본 경로 사용
+      stage: 1
+

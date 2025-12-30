@@ -1,0 +1,6 @@
+# SpeechCraft Inference Dataset Config
+target: src.data.speechcraft.SpeechCraftDataset
+params:
+  csv_file: null  # inference 시 사용할 CSV 파일 경로 설정 필요
+  stage: 1
+

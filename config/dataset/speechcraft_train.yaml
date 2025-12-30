@@ -1,0 +1,17 @@
+# SpeechCraft Train Dataset Config
+target: src.data.speechcraft.SpeechCraftDataset
+params:
+  data_root: null
+  batch_size: 4
+  num_workers: 4
+  train:
+    target: src.data.speechcraft.SpeechCraftDataset
+    params:
+      csv_file: null  # SpeechCraft CSV 파일 경로 설정 필요
+      stage: 1
+  validation:
+    target: src.data.speechcraft.SpeechCraftDataset
+    params:
+      csv_file: null  # SpeechCraft CSV 파일 경로 설정 필요
+      stage: 1
+

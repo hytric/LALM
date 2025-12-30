@@ -1,15 +1,21 @@
 import os
 import sys
-import argparse
-import yaml
 from pathlib import Path
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-from utils.setup_util import instantiate_from_config, load_config
+from src.utils.common_utils import instantiate_from_config
 from .trainer import LALMTrainer
+
+# Hydra DictConfig 지원
+try:
+    from omegaconf import DictConfig, OmegaConf
+    HAS_HYDRA = True
+except ImportError:
+    HAS_HYDRA = False
+    DictConfig = dict
 
 
 def setup_data_module(data_config):
@@ -87,17 +93,41 @@ def setup_trainer(lightning_config, callbacks, logger, resume_from_checkpoint=No
     return trainer
 
 
-def main(args):
-    config = load_config(args.config)
+def _convert_to_dict(cfg):
+    """Convert DictConfig to dict if needed"""
+    if HAS_HYDRA and isinstance(cfg, DictConfig):
+        return OmegaConf.to_container(cfg, resolve=True)
+    return cfg
+
+def main(cfg: DictConfig):
+    """
+    Main training function using Hydra config.
+    
+    Args:
+        cfg: Hydra DictConfig or dict containing all configuration
+    """
+    # Convert to dict for compatibility
+    config = _convert_to_dict(cfg)
     
     # Setup logger
-    experiment_name = args.experiment_name or Path(args.config).stem
-    log_dir = os.path.join(args.save_dir, experiment_name)
+    experiment_config = config.get('experiment', {})
+    experiment_name = experiment_config.get('name')
+    if experiment_name is None:
+        # Use dataset name if experiment name not specified
+        dataset_name = config.get('dataset', {}).get('target', 'unknown')
+        if isinstance(dataset_name, str):
+            experiment_name = dataset_name.split('.')[-1].replace('Dataset', '')
+        else:
+            experiment_name = 'experiment'
     
-    if args.logger == 'wandb':
+    save_dir = experiment_config.get('save_dir', './logs')
+    logger_type = experiment_config.get('logger', 'tensorboard')
+    log_dir = os.path.join(save_dir, experiment_name)
+    
+    if logger_type == 'wandb':
         logger = WandbLogger(name=experiment_name, save_dir=log_dir)
     else:
-        logger = TensorBoardLogger(save_dir=args.save_dir, name=experiment_name)
+        logger = TensorBoardLogger(save_dir=save_dir, name=experiment_name)
     
     # Setup model
     model_config = config['model']
@@ -117,16 +147,20 @@ def main(args):
     train_dataloader = None  # TODO: implement dataloader setup
     val_dataloader = None    # TODO: implement dataloader setup
     
-    # Setup callbacks
-    lightning_config = config.get('lightning', {})
-    callbacks = setup_callbacks(lightning_config)
+    # Setup callbacks and trainer
+    trainer_config = config.get('trainer', {})
+    callbacks = setup_callbacks(trainer_config)
+    
+    # Get resume checkpoint from trainer config
+    trainer_params = trainer_config.get('trainer', {})
+    resume_from_checkpoint = trainer_params.get('resume_from_checkpoint')
     
     # Setup trainer
     trainer = setup_trainer(
-        lightning_config=lightning_config,
+        lightning_config=trainer_config,
         callbacks=callbacks,
         logger=logger,
-        resume_from_checkpoint=args.resume,
+        resume_from_checkpoint=resume_from_checkpoint,
     )
     
     # Train

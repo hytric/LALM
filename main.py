@@ -1,15 +1,20 @@
 from src.train import main
-import argparse
+from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig
+import hydra
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Train LALM model')
-    parser.add_argument('--config', type=str, required=True, help='Path to config YAML file')
-    parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint to resume from')
-    parser.add_argument('--logger', type=str, default='tensorboard', choices=['tensorboard', 'wandb'], help='Logger type')
-    parser.add_argument('--experiment_name', type=str, default=None, help='Experiment name for logging')
-    parser.add_argument('--save_dir', type=str, default='./logs', help='Directory to save logs and checkpoints')
-    return parser.parse_args()
+@hydra.main(version_base=None, config_path="config", config_name="config")
+def run_with_hydra(cfg: DictConfig):
+    """
+    Main entry point with Hydra.
+    
+    Usage:
+        python main.py
+        python main.py dataset=speechcraft_train
+        python main.py experiment.name=my_experiment trainer.trainer.resume_from_checkpoint=path/to/ckpt
+        python main.py model=base dataset=librispeech_train
+    """
+    main(cfg)
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    run_with_hydra()

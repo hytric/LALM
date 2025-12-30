@@ -1,0 +1,7 @@
+# Base Inference Config
+device: "cuda"  # or "cpu"
+batch_size: 1
+max_new_tokens: 512
+do_sample: False
+temperature: 1.0
+

@@ -1,0 +1,13 @@
+# Main Config File - Hydra defaults
+defaults:
+  - dataset: librispeech_train
+  - model: qlora
+  - trainer: base
+  - _self_
+
+# Experiment settings
+experiment:
+  name: null  # null이면 dataset 이름 사용
+  save_dir: ./logs
+  logger: tensorboard  # tensorboard or wandb
+

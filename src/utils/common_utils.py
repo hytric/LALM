@@ -7,6 +7,15 @@ from transformers import AutoModel, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
 import os
 
+# Hydra DictConfig 지원
+try:
+    from omegaconf import DictConfig, OmegaConf
+    HAS_HYDRA = True
+except ImportError:
+    HAS_HYDRA = False
+    DictConfig = None
+    OmegaConf = None
+
 def load_config(config_path):
     """
     Load YAML configuration file
@@ -31,11 +40,32 @@ def get_obj_from_str(string, reload=False):
         importlib.reload(module_imp)
     return getattr(__import__(module, fromlist=[cls]), cls)
 
+def _convert_to_dict(config):
+    """
+    Convert Hydra DictConfig to regular dict if needed.
+    
+    Args:
+        config: DictConfig or dict
+    
+    Returns:
+        dict
+    """
+    if HAS_HYDRA and isinstance(config, DictConfig):
+        return OmegaConf.to_container(config, resolve=True)
+    return config
+
 def instantiate_from_config(config):
     """
     Instantiate class from config dictionary.
     Supports nested configs by recursively processing params.
+    Also supports Hydra DictConfig.
+    
+    Args:
+        config: dict or DictConfig containing 'target' or 'class_name' key
     """
+    # DictConfig를 dict로 변환
+    config = _convert_to_dict(config)
+    
     # Config 복사 (원본 보존)
     config = config.copy()
     
@@ -49,12 +79,15 @@ def instantiate_from_config(config):
     
     # params가 있으면 params를 사용, 없으면 config의 나머지를 사용
     if "params" in config:
-        params = config["params"].copy()
+        params = _convert_to_dict(config["params"]).copy()
     else:
         params = config.copy()
     
     # params 내부의 nested config를 재귀적으로 처리
     for key, value in params.items():
+        # DictConfig나 dict인지 확인
+        if HAS_HYDRA and isinstance(value, DictConfig):
+            value = _convert_to_dict(value)
         if isinstance(value, dict) and ("target" in value or "class_name" in value):
             params[key] = instantiate_from_config(value)
     
