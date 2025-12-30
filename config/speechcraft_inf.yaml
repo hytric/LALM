@@ -23,12 +23,11 @@ model:
     projector_hidden_act: "gelu"
     projector_bias: False
 
-# Inference용 데이터셋 설정 (필요한 경우만 사용)
+# Inference용 데이터셋 설정 - SpeechCraft
 data:
-  target: src.data.librispeech.LibriSpeechDataset
+  target: src.data.speechcraft.SpeechCraftDataset
   params:
-    jsonl_file: "dataset/Librispeech/librispeech_test.jsonl"  # inference 시 사용할 JSONL 파일 경로
-    librispeech_root: null  # null이면 환경변수 LIBRISPEECH_ROOT 또는 기본 경로 사용
+    csv_file: null  # inference 시 사용할 CSV 파일 경로 설정 필요
     stage: 1
 
 # Inference용 설정 - 학습 관련 설정 불필요

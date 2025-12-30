@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from transformers import AutoModel, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
+import src.utils.common_utils as common_utils
 import os
 
 
@@ -335,47 +336,3 @@ class Wav2Vec2AudioEncoder(BaseAudioEncoder):
         return self.encoder.config.hidden_size
 
 
-def _apply_lora(
-    model,
-    use_lora=False,
-    use_qlora=False,
-    lora_r=16,
-    lora_alpha=32,
-    lora_dropout=0.05,
-    lora_target_modules=None,
-    lora_path=None,
-    task_type=None,
-    default_target_modules=None,
-):
-    """
-    LoRA/QLoRA apply helper function
-    """
-    if not use_lora and not use_qlora:
-        return model
-    
-    if use_qlora:
-        model = prepare_model_for_kbit_training(model)
-        model.config.use_cache = False
-    
-    if lora_target_modules is None:
-        lora_target_modules = default_target_modules
-    
-    if lora_target_modules is None:
-        raise ValueError("lora_target_modules must be specified when use_lora=True or use_qlora=True")
-    
-    lora_config_kwargs = {
-        "r": lora_r,
-        "lora_alpha": lora_alpha,
-        "lora_dropout": lora_dropout,
-        "bias": "none",
-        "target_modules": lora_target_modules,
-    }
-    if task_type is not None:
-        lora_config_kwargs["task_type"] = task_type
-    
-    lora_config = LoraConfig(**lora_config_kwargs)
-    model = get_peft_model(model, lora_config)
-    if lora_path is not None:
-        model = PeftModel.from_pretrained(model, lora_path)
-    
-    return model

@@ -22,3 +22,4 @@ checkpoint-*/
 
 # test 파일
 test*
+*.jsonl

@@ -27,7 +27,7 @@ model:
     projector_bias: False
 
 data:
-  target: src.dataset.speechcraft.SpeechCraftDataset
+  target: src.data.librispeech.LibriSpeechDataset
   params:
     data_root: null
     batch_size: 4

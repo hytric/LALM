@@ -23,7 +23,7 @@ model:
     projector_hidden_act: "gelu"
     projector_bias: False
 
-# Inference용 데이터셋 설정 (필요한 경우만 사용)
+# Inference용 데이터셋 설정 - LibriSpeech
 data:
   target: src.data.librispeech.LibriSpeechDataset
   params:
